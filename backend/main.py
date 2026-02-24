@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from services.transcribe import transcribe_audio, save_midi_to_temp
 from services.youtube import download_youtube_audio, validate_youtube_url
+from services.youtube_search import get_video_metadata, search_piano_covers
 from services.arrange import midi_to_score, arrange_beginner, arrange_intermediate, arrange_advanced
 from services.abc_export import score_to_abc
 
@@ -26,6 +27,33 @@ app.add_middleware(
 
 class YouTubeRequest(BaseModel):
     url: str
+    mode: str = "direct"  # "direct" | "demucs"
+
+
+class YouTubeAnalyzeRequest(BaseModel):
+    url: str
+
+
+class VideoMetadata(BaseModel):
+    video_id: str
+    title: str
+    channel: str
+    thumbnail: str
+    duration_seconds: int
+
+
+class VideoCoverCandidate(VideoMetadata):
+    url: str
+
+
+class YouTubeAnalyzeResponse(BaseModel):
+    original: VideoMetadata
+    piano_covers: list[VideoCoverCandidate]
+
+
+class DemucsStatusResponse(BaseModel):
+    available: bool
+    model_name: str
 
 
 class SheetMusicResponse(BaseModel):
@@ -101,24 +129,64 @@ async def transcribe_upload(file: UploadFile = File(...)):
             os.unlink(tmp_path)
 
 
+@app.post("/api/youtube/analyze", response_model=YouTubeAnalyzeResponse)
+async def analyze_youtube(request: YouTubeAnalyzeRequest):
+    """YouTube URLのメタデータを取得し、ピアノカバーを検索"""
+    if not validate_youtube_url(request.url):
+        raise HTTPException(status_code=400, detail="無効なYouTube URLです。")
+
+    try:
+        metadata = get_video_metadata(request.url)
+        covers = search_piano_covers(metadata["title"])
+        return YouTubeAnalyzeResponse(
+            original=VideoMetadata(**metadata),
+            piano_covers=[VideoCoverCandidate(**c) for c in covers],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"分析中にエラーが発生しました: {str(e)}")
+
+
 @app.post("/api/transcribe/youtube", response_model=SheetMusicResponse)
 async def transcribe_youtube(request: YouTubeRequest):
-    """YouTube URLから楽譜を生成"""
+    """YouTube URLから楽譜を生成（mode: direct/demucs）"""
     if not validate_youtube_url(request.url):
         raise HTTPException(status_code=400, detail="無効なYouTube URLです。")
 
     audio_path = None
+    demucs_dir = None
     try:
         audio_path = download_youtube_audio(request.url)
+
+        if request.mode == "demucs":
+            from services.demucs_service import is_demucs_available, separate_audio
+            if not is_demucs_available():
+                raise HTTPException(status_code=400, detail="Demucsが利用できません。")
+            stem_path = separate_audio(audio_path, stem="other")
+            demucs_dir = os.path.dirname(os.path.dirname(os.path.dirname(stem_path)))
+            return _process_audio(stem_path)
+
         return _process_audio(audio_path)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"処理中にエラーが発生しました: {str(e)}")
     finally:
         if audio_path and os.path.exists(audio_path):
-            # 一時ディレクトリごと削除
             shutil.rmtree(os.path.dirname(audio_path), ignore_errors=True)
+        if demucs_dir and os.path.exists(demucs_dir):
+            shutil.rmtree(demucs_dir, ignore_errors=True)
+
+
+@app.get("/api/demucs/status", response_model=DemucsStatusResponse)
+async def demucs_status():
+    """Demucsの利用可否を確認"""
+    try:
+        from services.demucs_service import is_demucs_available
+        return DemucsStatusResponse(available=is_demucs_available(), model_name="htdemucs")
+    except Exception:
+        return DemucsStatusResponse(available=False, model_name="htdemucs")
 
 
 if __name__ == "__main__":

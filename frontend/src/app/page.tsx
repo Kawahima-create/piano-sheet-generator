@@ -51,7 +51,7 @@ export default function Home() {
         {/* 楽譜結果 */}
         {result && (
           <div className="mt-8">
-            <DifficultyTabs result={result} />
+            <DifficultyTabs result={result} onReset={() => setResult(null)} />
           </div>
         )}
       </main>

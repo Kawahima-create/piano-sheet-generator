@@ -138,10 +138,11 @@ def score_to_abc(
     return abc
 
 
-def _part_to_abc(part: music21.stream.Part) -> str:
-    """パートをABC文字列に変換"""
+def _part_to_abc(part: music21.stream.Part, measures_per_line: int = 4) -> str:
+    """パートをABC文字列に変換（数小節ごとに改行）"""
     result = ""
     beat_count = 0.0
+    bar_count = 0
 
     for element in part.flatten().notesAndRests:
         if isinstance(element, note.Note):
@@ -154,7 +155,11 @@ def _part_to_abc(part: music21.stream.Part) -> str:
         beat_count += element.quarterLength
         # 4拍で小節線
         if beat_count >= 4.0:
-            result += "| "
+            bar_count += 1
+            if bar_count % measures_per_line == 0:
+                result += "|\n"
+            else:
+                result += "| "
             beat_count -= 4.0
 
     if not result.rstrip().endswith("|"):
@@ -163,10 +168,11 @@ def _part_to_abc(part: music21.stream.Part) -> str:
     return result
 
 
-def _stream_to_abc_line(s) -> str:
-    """任意のストリームをABC 1行に変換"""
+def _stream_to_abc_line(s, measures_per_line: int = 4) -> str:
+    """任意のストリームをABC文字列に変換（数小節ごとに改行）"""
     result = ""
     beat_count = 0.0
+    bar_count = 0
 
     for element in s.flatten().notesAndRests:
         if isinstance(element, note.Note):
@@ -178,7 +184,11 @@ def _stream_to_abc_line(s) -> str:
 
         beat_count += element.quarterLength
         if beat_count >= 4.0:
-            result += "| "
+            bar_count += 1
+            if bar_count % measures_per_line == 0:
+                result += "|\n"
+            else:
+                result += "| "
             beat_count -= 4.0
 
     return result

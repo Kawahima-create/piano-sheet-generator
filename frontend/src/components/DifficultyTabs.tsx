@@ -18,9 +18,10 @@ const LABELS: Record<Difficulty, { label: string; description: string }> = {
 
 interface DifficultyTabsProps {
   result: SheetMusicResponse;
+  onReset?: () => void;
 }
 
-export default function DifficultyTabs({ result }: DifficultyTabsProps) {
+export default function DifficultyTabs({ result, onReset }: DifficultyTabsProps) {
   const [active, setActive] = useState<Difficulty>("beginner");
 
   const currentAbc = result[active];
@@ -69,7 +70,7 @@ export default function DifficultyTabs({ result }: DifficultyTabsProps) {
       <div className="flex justify-center gap-4 mt-6">
         <PDFDownload difficulty={LABELS[active].label} />
         <button
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          onClick={() => onReset?.()}
           className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-medium hover:bg-gray-200 transition-colors"
         >
           別の曲を変換

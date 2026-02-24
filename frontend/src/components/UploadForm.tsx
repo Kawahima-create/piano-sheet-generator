@@ -1,8 +1,18 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { transcribeUpload, transcribeYoutube } from "@/lib/api";
-import type { SheetMusicResponse } from "@/lib/api";
+import { useState, useCallback, useEffect } from "react";
+import {
+  transcribeUpload,
+  transcribeYoutube,
+  analyzeYoutube,
+  getDemucsStatus,
+} from "@/lib/api";
+import type {
+  SheetMusicResponse,
+  YouTubeAnalyzeResponse,
+  VideoCoverCandidate,
+} from "@/lib/api";
+import SourceSelector from "./SourceSelector";
 
 interface UploadFormProps {
   onResult: (result: SheetMusicResponse) => void;
@@ -15,6 +25,15 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
   const [loadingMessage, setLoadingMessage] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [dragOver, setDragOver] = useState(false);
+
+  // YouTube 2ステップフロー用
+  const [analysis, setAnalysis] = useState<YouTubeAnalyzeResponse | null>(null);
+  const [demucsAvailable, setDemucsAvailable] = useState(false);
+
+  // Demucsの利用可否を確認
+  useEffect(() => {
+    getDemucsStatus().then((s) => setDemucsAvailable(s.available));
+  }, []);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -51,28 +70,78 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
     [onResult, onError]
   );
 
-  const handleYoutubeSubmit = useCallback(async () => {
+  // Step 1: YouTube URLを分析
+  const handleAnalyze = useCallback(async () => {
     if (!youtubeUrl.trim()) {
       onError("YouTube URLを入力してください。");
       return;
     }
 
     setIsLoading(true);
-    setLoadingMessage("YouTube から音声をダウンロード中...");
+    setLoadingMessage("動画を分析しています...");
 
     try {
-      setTimeout(() => setLoadingMessage("音声を分析しています..."), 10000);
-      setTimeout(() => setLoadingMessage("音符を検出しています..."), 20000);
-      setTimeout(() => setLoadingMessage("楽譜を生成しています..."), 30000);
-      const result = await transcribeYoutube(youtubeUrl.trim());
-      onResult(result);
+      const result = await analyzeYoutube(youtubeUrl.trim());
+      setAnalysis(result);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "エラーが発生しました");
+      onError(e instanceof Error ? e.message : "分析に失敗しました");
     } finally {
       setIsLoading(false);
       setLoadingMessage("");
     }
-  }, [youtubeUrl, onResult, onError]);
+  }, [youtubeUrl, onError]);
+
+  // Step 2: ピアノカバーを選択して変換
+  const handleSelectCover = useCallback(
+    async (cover: VideoCoverCandidate) => {
+      setIsLoading(true);
+      setLoadingMessage("ピアノカバーをダウンロード中...");
+
+      try {
+        setTimeout(() => setLoadingMessage("音声を分析しています..."), 10000);
+        setTimeout(() => setLoadingMessage("音符を検出しています..."), 20000);
+        setTimeout(() => setLoadingMessage("楽譜を生成しています..."), 30000);
+        const result = await transcribeYoutube(cover.url, "direct");
+        onResult(result);
+      } catch (e) {
+        onError(e instanceof Error ? e.message : "エラーが発生しました");
+      } finally {
+        setIsLoading(false);
+        setLoadingMessage("");
+      }
+    },
+    [onResult, onError]
+  );
+
+  // Step 2: 元の動画を使って変換
+  const handleSelectOriginal = useCallback(
+    async (mode: "direct" | "demucs") => {
+      setIsLoading(true);
+      setLoadingMessage(
+        mode === "demucs"
+          ? "音源分離を実行中..."
+          : "YouTube から音声をダウンロード中..."
+      );
+
+      try {
+        setTimeout(() => setLoadingMessage("音声を分析しています..."), 10000);
+        setTimeout(() => setLoadingMessage("音符を検出しています..."), 20000);
+        setTimeout(() => setLoadingMessage("楽譜を生成しています..."), 30000);
+        const result = await transcribeYoutube(youtubeUrl.trim(), mode);
+        onResult(result);
+      } catch (e) {
+        onError(e instanceof Error ? e.message : "エラーが発生しました");
+      } finally {
+        setIsLoading(false);
+        setLoadingMessage("");
+      }
+    },
+    [youtubeUrl, onResult, onError]
+  );
+
+  const handleBack = useCallback(() => {
+    setAnalysis(null);
+  }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -84,6 +153,7 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
     [handleFile]
   );
 
+  // ローディング表示
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-6">
@@ -95,6 +165,19 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
           音声の長さによっては数十秒かかることがあります
         </p>
       </div>
+    );
+  }
+
+  // YouTube Step 2: ソース選択画面
+  if (analysis) {
+    return (
+      <SourceSelector
+        analysis={analysis}
+        demucsAvailable={demucsAvailable}
+        onSelectCover={handleSelectCover}
+        onSelectOriginal={handleSelectOriginal}
+        onBack={handleBack}
+      />
     );
   }
 
@@ -165,17 +248,17 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
               onChange={(e) => setYoutubeUrl(e.target.value)}
               placeholder="https://www.youtube.com/watch?v=..."
               className="flex-1 px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-gray-700"
-              onKeyDown={(e) => e.key === "Enter" && handleYoutubeSubmit()}
+              onKeyDown={(e) => e.key === "Enter" && handleAnalyze()}
             />
             <button
-              onClick={handleYoutubeSubmit}
+              onClick={handleAnalyze}
               className="px-6 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition-colors shadow-sm"
             >
-              変換
+              分析
             </button>
           </div>
           <p className="text-sm text-gray-400 text-center">
-            YouTube動画のURLを貼り付けてください
+            URLを入力すると、ピアノカバーの候補を自動検索します
           </p>
         </div>
       )}
