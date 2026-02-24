@@ -1,31 +1,21 @@
 "use client";
 
-import type { YouTubeAnalyzeResponse, VideoCoverCandidate } from "@/lib/api";
+import type { YouTubeAnalyzeResponse } from "@/lib/api";
 
 interface SourceSelectorProps {
   analysis: YouTubeAnalyzeResponse;
   demucsAvailable: boolean;
-  onSelectCover: (cover: VideoCoverCandidate) => void;
-  onSelectEnsemble: () => void;
   onSelectOriginal: (mode: "direct" | "demucs") => void;
   onBack: () => void;
-}
-
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export default function SourceSelector({
   analysis,
   demucsAvailable,
-  onSelectCover,
-  onSelectEnsemble,
   onSelectOriginal,
   onBack,
 }: SourceSelectorProps) {
-  const { original, piano_covers } = analysis;
+  const { original } = analysis;
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-6">
@@ -57,57 +47,12 @@ export default function SourceSelector({
         </button>
       </div>
 
-      {/* ピアノカバー候補 */}
-      {piano_covers.length > 0 && (
-        <div>
-          {/* 全カバーから生成ボタン（推奨） */}
-          {piano_covers.length >= 2 && (
-            <button
-              onClick={onSelectEnsemble}
-              className="w-full p-4 mb-4 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl hover:from-violet-700 hover:to-fuchsia-700 transition-all text-left shadow-sm"
-            >
-              <p className="font-semibold">
-                全{piano_covers.length}件のカバーから高精度生成（推奨）
-              </p>
-              <p className="text-sm text-violet-100 mt-1">
-                複数のピアノカバーを照合して、最も正確な楽譜を生成します（数分かかります）
-              </p>
-            </button>
-          )}
-
-          <h3 className="text-sm font-semibold text-gray-600 mb-3">
-            個別のカバーを選んで生成
-          </h3>
-          <div className="space-y-2">
-            {piano_covers.map((cover) => (
-              <button
-                key={cover.video_id}
-                onClick={() => onSelectCover(cover)}
-                className="w-full flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-xl hover:border-violet-400 hover:bg-violet-50/50 transition-all text-left group"
-              >
-                <img
-                  src={cover.thumbnail}
-                  alt={cover.title}
-                  className="w-20 h-14 object-cover rounded-lg"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-700 truncate group-hover:text-violet-700">
-                    {cover.title}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {cover.channel}
-                    {cover.duration_seconds > 0 &&
-                      ` · ${formatDuration(cover.duration_seconds)}`}
-                  </p>
-                </div>
-                <span className="text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm shrink-0">
-                  選択 →
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* ピアノカバーが見つからなかった旨を表示 */}
+      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+        <p className="text-sm text-amber-700">
+          ピアノカバーが見つかりませんでした。元の動画から直接楽譜を生成できます。
+        </p>
+      </div>
 
       {/* 元の動画をそのまま使うセクション */}
       <div>

@@ -11,7 +11,6 @@ import {
 import type {
   SheetMusicResponse,
   YouTubeAnalyzeResponse,
-  VideoCoverCandidate,
 } from "@/lib/api";
 import SourceSelector from "./SourceSelector";
 
@@ -71,7 +70,7 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
     [onResult, onError]
   );
 
-  // Step 1: YouTube URLを分析
+  // Step 1: YouTube URLを分析 → カバーがあれば自動でアンサンブル転写
   const handleAnalyze = useCallback(async () => {
     if (!youtubeUrl.trim()) {
       onError("YouTube URLを入力してください。");
@@ -84,37 +83,39 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
     try {
       const result = await analyzeYoutube(youtubeUrl.trim());
       setAnalysis(result);
+
+      // カバーが見つかった場合は自動的にアンサンブル転写を開始
+      if (result.piano_covers.length >= 1) {
+        const urls = result.piano_covers.map((c) => c.url);
+        const songTitle = result.original.song_title || "";
+        const artist = result.original.artist || "";
+        const count = result.piano_covers.length;
+
+        setLoadingMessage(`${count}件のカバーをダウンロード中... (1/${count})`);
+
+        let step = 1;
+        const interval = setInterval(() => {
+          step++;
+          if (step <= count) {
+            setLoadingMessage(`${count}件のカバーをダウンロード中... (${step}/${count})`);
+          } else {
+            setLoadingMessage("全カバーの音符を照合・統合しています...");
+          }
+        }, 30000);
+
+        const ensembleResult = await transcribeEnsemble(urls, songTitle, artist);
+        clearInterval(interval);
+        onResult(ensembleResult);
+        return;
+      }
+      // カバーが見つからなかった場合はSourceSelectorを表示
     } catch (e) {
       onError(e instanceof Error ? e.message : "分析に失敗しました");
     } finally {
       setIsLoading(false);
       setLoadingMessage("");
     }
-  }, [youtubeUrl, onError]);
-
-  // Step 2: ピアノカバーを選択して変換
-  const handleSelectCover = useCallback(
-    async (cover: VideoCoverCandidate) => {
-      setIsLoading(true);
-      setLoadingMessage("ピアノカバーをダウンロード中...");
-
-      try {
-        setTimeout(() => setLoadingMessage("音声を分析しています..."), 10000);
-        setTimeout(() => setLoadingMessage("音符を検出しています..."), 20000);
-        setTimeout(() => setLoadingMessage("楽譜を生成しています..."), 30000);
-        const songTitle = analysis?.original.song_title || "";
-        const artist = analysis?.original.artist || "";
-        const result = await transcribeYoutube(cover.url, "direct", songTitle, artist);
-        onResult(result);
-      } catch (e) {
-        onError(e instanceof Error ? e.message : "エラーが発生しました");
-      } finally {
-        setIsLoading(false);
-        setLoadingMessage("");
-      }
-    },
-    [analysis, onResult, onError]
-  );
+  }, [youtubeUrl, onError, onResult]);
 
   // Step 2: 元の動画を使って変換
   const handleSelectOriginal = useCallback(
@@ -143,41 +144,6 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
     },
     [youtubeUrl, analysis, onResult, onError]
   );
-
-  // Step 2: 全カバーをアンサンブルで生成
-  const handleEnsemble = useCallback(async () => {
-    if (!analysis || analysis.piano_covers.length === 0) return;
-
-    setIsLoading(true);
-    const count = analysis.piano_covers.length;
-    setLoadingMessage(`${count}件のカバーをダウンロード中... (1/${count})`);
-
-    try {
-      const urls = analysis.piano_covers.map((c) => c.url);
-      const songTitle = analysis.original.song_title || "";
-      const artist = analysis.original.artist || "";
-
-      // 進捗メッセージ
-      let step = 1;
-      const interval = setInterval(() => {
-        step++;
-        if (step <= count) {
-          setLoadingMessage(`${count}件のカバーをダウンロード中... (${step}/${count})`);
-        } else {
-          setLoadingMessage("全カバーの音符を照合・統合しています...");
-        }
-      }, 30000);
-
-      const result = await transcribeEnsemble(urls, songTitle, artist);
-      clearInterval(interval);
-      onResult(result);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "エラーが発生しました");
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage("");
-    }
-  }, [analysis, onResult, onError]);
 
   const handleBack = useCallback(() => {
     setAnalysis(null);
@@ -214,8 +180,6 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
       <SourceSelector
         analysis={analysis}
         demucsAvailable={demucsAvailable}
-        onSelectCover={handleSelectCover}
-        onSelectEnsemble={handleEnsemble}
         onSelectOriginal={handleSelectOriginal}
         onBack={handleBack}
       />
