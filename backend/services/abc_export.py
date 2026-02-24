@@ -96,6 +96,7 @@ def score_to_abc(
     score: music21.stream.Score,
     title: str = "Piano Arrangement",
     key_sig: str = "C",
+    composer: str = "",
 ) -> str:
     """
     music21のScoreをABC記譜法の文字列に変換。
@@ -115,6 +116,8 @@ def score_to_abc(
     # ヘッダー
     abc = f"X:1\n"
     abc += f"T:{title}\n"
+    if composer:
+        abc += f"C:{composer}\n"
     abc += f"M:4/4\n"
     abc += f"L:1/8\n"
     abc += f"Q:1/4=100\n"

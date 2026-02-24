@@ -13,6 +13,8 @@ export interface VideoMetadata {
   channel: string;
   thumbnail: string;
   duration_seconds: number;
+  artist: string;
+  song_title: string;
 }
 
 export interface VideoCoverCandidate extends VideoMetadata {
@@ -50,12 +52,14 @@ export async function transcribeUpload(
 
 export async function transcribeYoutube(
   url: string,
-  mode: "direct" | "demucs" = "direct"
+  mode: "direct" | "demucs" = "direct",
+  songTitle: string = "",
+  artist: string = "",
 ): Promise<SheetMusicResponse> {
   const res = await fetch(`${API_URL}/api/transcribe/youtube`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, mode }),
+    body: JSON.stringify({ url, mode, song_title: songTitle, artist }),
   });
 
   if (!res.ok) {

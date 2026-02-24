@@ -101,7 +101,9 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
         setTimeout(() => setLoadingMessage("音声を分析しています..."), 10000);
         setTimeout(() => setLoadingMessage("音符を検出しています..."), 20000);
         setTimeout(() => setLoadingMessage("楽譜を生成しています..."), 30000);
-        const result = await transcribeYoutube(cover.url, "direct");
+        const songTitle = analysis?.original.song_title || "";
+        const artist = analysis?.original.artist || "";
+        const result = await transcribeYoutube(cover.url, "direct", songTitle, artist);
         onResult(result);
       } catch (e) {
         onError(e instanceof Error ? e.message : "エラーが発生しました");
@@ -110,7 +112,7 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
         setLoadingMessage("");
       }
     },
-    [onResult, onError]
+    [analysis, onResult, onError]
   );
 
   // Step 2: 元の動画を使って変換
@@ -127,7 +129,9 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
         setTimeout(() => setLoadingMessage("音声を分析しています..."), 10000);
         setTimeout(() => setLoadingMessage("音符を検出しています..."), 20000);
         setTimeout(() => setLoadingMessage("楽譜を生成しています..."), 30000);
-        const result = await transcribeYoutube(youtubeUrl.trim(), mode);
+        const songTitle = analysis?.original.song_title || "";
+        const artist = analysis?.original.artist || "";
+        const result = await transcribeYoutube(youtubeUrl.trim(), mode, songTitle, artist);
         onResult(result);
       } catch (e) {
         onError(e instanceof Error ? e.message : "エラーが発生しました");
@@ -136,7 +140,7 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
         setLoadingMessage("");
       }
     },
-    [youtubeUrl, onResult, onError]
+    [youtubeUrl, analysis, onResult, onError]
   );
 
   const handleBack = useCallback(() => {

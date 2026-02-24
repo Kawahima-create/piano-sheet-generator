@@ -28,6 +28,8 @@ app.add_middleware(
 class YouTubeRequest(BaseModel):
     url: str
     mode: str = "direct"  # "direct" | "demucs"
+    song_title: str = ""
+    artist: str = ""
 
 
 class YouTubeAnalyzeRequest(BaseModel):
@@ -40,6 +42,8 @@ class VideoMetadata(BaseModel):
     channel: str
     thumbnail: str
     duration_seconds: int
+    artist: str = ""
+    song_title: str = ""
 
 
 class VideoCoverCandidate(VideoMetadata):
@@ -63,7 +67,7 @@ class SheetMusicResponse(BaseModel):
     key: str
 
 
-def _process_audio(audio_path: str) -> SheetMusicResponse:
+def _process_audio(audio_path: str, song_title: str = "", artist: str = "") -> SheetMusicResponse:
     """音声ファイルを処理して3レベルの楽譜を生成"""
     # 1. 音声 → MIDI
     midi_data = transcribe_audio(audio_path)
@@ -80,11 +84,12 @@ def _process_audio(audio_path: str) -> SheetMusicResponse:
 
         # 4. ABC記譜法に変換
         key_name = f"{detected_key.tonic.name} {detected_key.mode}"
+        base_title = song_title or "Piano Arrangement"
 
         return SheetMusicResponse(
-            beginner=score_to_abc(beginner_score, title="Beginner", key_sig=str(detected_key)),
-            intermediate=score_to_abc(intermediate_score, title="Intermediate", key_sig=str(detected_key)),
-            advanced=score_to_abc(advanced_score, title="Advanced", key_sig=str(detected_key)),
+            beginner=score_to_abc(beginner_score, title=f"{base_title} (Beginner)", key_sig=str(detected_key), composer=artist),
+            intermediate=score_to_abc(intermediate_score, title=f"{base_title} (Intermediate)", key_sig=str(detected_key), composer=artist),
+            advanced=score_to_abc(advanced_score, title=f"{base_title} (Advanced)", key_sig=str(detected_key), composer=artist),
             key=key_name,
         )
     finally:
@@ -137,7 +142,7 @@ async def analyze_youtube(request: YouTubeAnalyzeRequest):
 
     try:
         metadata = get_video_metadata(request.url)
-        covers = search_piano_covers(metadata["title"])
+        covers = search_piano_covers(metadata["song_title"], metadata["artist"])
         return YouTubeAnalyzeResponse(
             original=VideoMetadata(**metadata),
             piano_covers=[VideoCoverCandidate(**c) for c in covers],
@@ -163,9 +168,9 @@ async def transcribe_youtube(request: YouTubeRequest):
                 raise HTTPException(status_code=400, detail="Demucsが利用できません。")
             stem_path = separate_audio(audio_path, stem="other")
             demucs_dir = os.path.dirname(os.path.dirname(os.path.dirname(stem_path)))
-            return _process_audio(stem_path)
+            return _process_audio(stem_path, song_title=request.song_title, artist=request.artist)
 
-        return _process_audio(audio_path)
+        return _process_audio(audio_path, song_title=request.song_title, artist=request.artist)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:

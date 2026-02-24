@@ -35,8 +35,17 @@ export default function SourceSelector({
           className="w-24 h-16 object-cover rounded-lg"
         />
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-gray-800 truncate">{original.title}</p>
-          <p className="text-sm text-gray-500">{original.channel}</p>
+          {original.song_title ? (
+            <>
+              <p className="font-medium text-gray-800 truncate">{original.song_title}</p>
+              <p className="text-sm text-gray-500">{original.artist || original.channel}</p>
+            </>
+          ) : (
+            <>
+              <p className="font-medium text-gray-800 truncate">{original.title}</p>
+              <p className="text-sm text-gray-500">{original.channel}</p>
+            </>
+          )}
         </div>
         <button
           onClick={onBack}
