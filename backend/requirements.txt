@@ -2,6 +2,8 @@ fastapi
 uvicorn[standard]
 python-multipart
 basic-pitch
+onnxruntime
+scipy<1.12
 music21
 yt-dlp
 pretty_midi

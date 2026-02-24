@@ -2,9 +2,15 @@
 
 import tempfile
 import os
+import pathlib
 from basic_pitch.inference import predict
 from basic_pitch import ICASSP_2022_MODEL_PATH
 import pretty_midi
+
+# ONNXモデルを優先的に使用（TF SavedModelとの互換性問題を回避）
+_MODEL_DIR = pathlib.Path(ICASSP_2022_MODEL_PATH).parent
+_ONNX_MODEL = _MODEL_DIR / "nmp.onnx"
+_MODEL_PATH = str(_ONNX_MODEL) if _ONNX_MODEL.exists() else ICASSP_2022_MODEL_PATH
 
 
 def transcribe_audio(audio_path: str) -> pretty_midi.PrettyMIDI:
@@ -20,7 +26,7 @@ def transcribe_audio(audio_path: str) -> pretty_midi.PrettyMIDI:
     """
     _, midi_data, _ = predict(
         audio_path=audio_path,
-        model_or_model_path=ICASSP_2022_MODEL_PATH,
+        model_or_model_path=_MODEL_PATH,
     )
     return midi_data
 
