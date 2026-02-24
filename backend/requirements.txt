@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+python-multipart
+basic-pitch
+music21
+yt-dlp
+pretty_midi
