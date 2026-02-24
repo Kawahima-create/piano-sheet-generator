@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import {
   transcribeUpload,
   transcribeYoutube,
+  transcribeEnsemble,
   analyzeYoutube,
   getDemucsStatus,
 } from "@/lib/api";
@@ -143,6 +144,41 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
     [youtubeUrl, analysis, onResult, onError]
   );
 
+  // Step 2: 全カバーをアンサンブルで生成
+  const handleEnsemble = useCallback(async () => {
+    if (!analysis || analysis.piano_covers.length === 0) return;
+
+    setIsLoading(true);
+    const count = analysis.piano_covers.length;
+    setLoadingMessage(`${count}件のカバーをダウンロード中... (1/${count})`);
+
+    try {
+      const urls = analysis.piano_covers.map((c) => c.url);
+      const songTitle = analysis.original.song_title || "";
+      const artist = analysis.original.artist || "";
+
+      // 進捗メッセージ
+      let step = 1;
+      const interval = setInterval(() => {
+        step++;
+        if (step <= count) {
+          setLoadingMessage(`${count}件のカバーをダウンロード中... (${step}/${count})`);
+        } else {
+          setLoadingMessage("全カバーの音符を照合・統合しています...");
+        }
+      }, 30000);
+
+      const result = await transcribeEnsemble(urls, songTitle, artist);
+      clearInterval(interval);
+      onResult(result);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "エラーが発生しました");
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage("");
+    }
+  }, [analysis, onResult, onError]);
+
   const handleBack = useCallback(() => {
     setAnalysis(null);
   }, []);
@@ -179,6 +215,7 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
         analysis={analysis}
         demucsAvailable={demucsAvailable}
         onSelectCover={handleSelectCover}
+        onSelectEnsemble={handleEnsemble}
         onSelectOriginal={handleSelectOriginal}
         onBack={handleBack}
       />

@@ -6,6 +6,7 @@ interface SourceSelectorProps {
   analysis: YouTubeAnalyzeResponse;
   demucsAvailable: boolean;
   onSelectCover: (cover: VideoCoverCandidate) => void;
+  onSelectEnsemble: () => void;
   onSelectOriginal: (mode: "direct" | "demucs") => void;
   onBack: () => void;
 }
@@ -20,6 +21,7 @@ export default function SourceSelector({
   analysis,
   demucsAvailable,
   onSelectCover,
+  onSelectEnsemble,
   onSelectOriginal,
   onBack,
 }: SourceSelectorProps) {
@@ -58,12 +60,24 @@ export default function SourceSelector({
       {/* ピアノカバー候補 */}
       {piano_covers.length > 0 && (
         <div>
+          {/* 全カバーから生成ボタン（推奨） */}
+          {piano_covers.length >= 2 && (
+            <button
+              onClick={onSelectEnsemble}
+              className="w-full p-4 mb-4 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl hover:from-violet-700 hover:to-fuchsia-700 transition-all text-left shadow-sm"
+            >
+              <p className="font-semibold">
+                全{piano_covers.length}件のカバーから高精度生成（推奨）
+              </p>
+              <p className="text-sm text-violet-100 mt-1">
+                複数のピアノカバーを照合して、最も正確な楽譜を生成します（数分かかります）
+              </p>
+            </button>
+          )}
+
           <h3 className="text-sm font-semibold text-gray-600 mb-3">
-            ピアノカバーを使う（推奨）
+            個別のカバーを選んで生成
           </h3>
-          <p className="text-xs text-gray-400 mb-3">
-            ピアノ単体の音源を使うと、より正確な楽譜が生成されます
-          </p>
           <div className="space-y-2">
             {piano_covers.map((cover) => (
               <button

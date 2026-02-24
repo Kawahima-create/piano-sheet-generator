@@ -7,11 +7,16 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+import logging
+
 from services.transcribe import transcribe_audio, save_midi_to_temp
 from services.youtube import download_youtube_audio, validate_youtube_url
 from services.youtube_search import get_video_metadata, search_piano_covers
 from services.arrange import midi_to_score, arrange_beginner, arrange_intermediate, arrange_advanced
 from services.abc_export import score_to_abc
+from services.ensemble import merge_transcriptions
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Piano Sheet Generator API")
 
@@ -55,6 +60,12 @@ class YouTubeAnalyzeResponse(BaseModel):
     piano_covers: list[VideoCoverCandidate]
 
 
+class EnsembleRequest(BaseModel):
+    urls: list[str]  # ピアノカバーのURL一覧
+    song_title: str = ""
+    artist: str = ""
+
+
 class DemucsStatusResponse(BaseModel):
     available: bool
     model_name: str
@@ -67,22 +78,16 @@ class SheetMusicResponse(BaseModel):
     key: str
 
 
-def _process_audio(audio_path: str, song_title: str = "", artist: str = "") -> SheetMusicResponse:
-    """音声ファイルを処理して3レベルの楽譜を生成"""
-    # 1. 音声 → MIDI
-    midi_data = transcribe_audio(audio_path)
-
-    # 2. MIDI → music21 Score
+def _process_midi(midi_data, song_title: str = "", artist: str = "") -> SheetMusicResponse:
+    """PrettyMIDIオブジェクトから3レベルの楽譜を生成"""
     midi_path = save_midi_to_temp(midi_data)
     try:
         score, detected_key = midi_to_score(midi_path)
 
-        # 3. 3レベルの編曲
         beginner_score = arrange_beginner(score, detected_key)
         intermediate_score = arrange_intermediate(score, detected_key)
         advanced_score = arrange_advanced(score, detected_key)
 
-        # 4. ABC記譜法に変換
         key_name = f"{detected_key.tonic.name} {detected_key.mode}"
         base_title = song_title or "Piano Arrangement"
 
@@ -94,6 +99,12 @@ def _process_audio(audio_path: str, song_title: str = "", artist: str = "") -> S
         )
     finally:
         os.unlink(midi_path)
+
+
+def _process_audio(audio_path: str, song_title: str = "", artist: str = "") -> SheetMusicResponse:
+    """音声ファイルを処理して3レベルの楽譜を生成"""
+    midi_data = transcribe_audio(audio_path)
+    return _process_midi(midi_data, song_title=song_title, artist=artist)
 
 
 @app.get("/")
@@ -182,6 +193,45 @@ async def transcribe_youtube(request: YouTubeRequest):
             shutil.rmtree(os.path.dirname(audio_path), ignore_errors=True)
         if demucs_dir and os.path.exists(demucs_dir):
             shutil.rmtree(demucs_dir, ignore_errors=True)
+
+
+@app.post("/api/transcribe/ensemble", response_model=SheetMusicResponse)
+async def transcribe_ensemble(request: EnsembleRequest):
+    """複数のピアノカバーを分析・統合して高精度な楽譜を生成"""
+    if not request.urls:
+        raise HTTPException(status_code=400, detail="URLが指定されていません。")
+    if len(request.urls) > 5:
+        raise HTTPException(status_code=400, detail="最大5件まで指定できます。")
+
+    for url in request.urls:
+        if not validate_youtube_url(url):
+            raise HTTPException(status_code=400, detail=f"無効なYouTube URL: {url}")
+
+    audio_dirs: list[str] = []
+    try:
+        # 各カバーをダウンロード→転写
+        midi_list = []
+        for i, url in enumerate(request.urls):
+            logger.info(f"Ensemble: downloading {i+1}/{len(request.urls)}: {url}")
+            audio_path = download_youtube_audio(url)
+            audio_dirs.append(os.path.dirname(audio_path))
+            logger.info(f"Ensemble: transcribing {i+1}/{len(request.urls)}")
+            midi_data = transcribe_audio(audio_path)
+            midi_list.append(midi_data)
+
+        # アンサンブル統合
+        logger.info(f"Ensemble: merging {len(midi_list)} transcriptions")
+        merged_midi = merge_transcriptions(midi_list)
+
+        return _process_midi(merged_midi, song_title=request.song_title, artist=request.artist)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"処理中にエラーが発生しました: {str(e)}")
+    finally:
+        for d in audio_dirs:
+            if os.path.exists(d):
+                shutil.rmtree(d, ignore_errors=True)
 
 
 @app.get("/api/demucs/status", response_model=DemucsStatusResponse)

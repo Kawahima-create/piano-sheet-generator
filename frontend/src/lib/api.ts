@@ -87,6 +87,25 @@ export async function analyzeYoutube(
   return res.json();
 }
 
+export async function transcribeEnsemble(
+  urls: string[],
+  songTitle: string = "",
+  artist: string = "",
+): Promise<SheetMusicResponse> {
+  const res = await fetch(`${API_URL}/api/transcribe/ensemble`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ urls, song_title: songTitle, artist }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: "不明なエラー" }));
+    throw new Error(error.detail || "楽譜の生成に失敗しました");
+  }
+
+  return res.json();
+}
+
 export async function getDemucsStatus(): Promise<DemucsStatusResponse> {
   const res = await fetch(`${API_URL}/api/demucs/status`);
 
