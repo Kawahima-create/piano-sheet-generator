@@ -3,20 +3,34 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import unicodedata
 
 _YT_DLP = os.path.join(os.path.dirname(sys.executable), "yt-dlp")
 
+# Node.jsランタイムのパスを検出（yt-dlpのYouTube JS認証に必要）
+_NODE_PATH = shutil.which("node")
+if not _NODE_PATH:
+    for candidate in ["/opt/homebrew/bin/node", "/usr/local/bin/node"]:
+        if os.path.isfile(candidate):
+            _NODE_PATH = candidate
+            break
+
 
 def get_video_metadata(url: str) -> dict:
     """YouTube動画のメタデータ（タイトル・チャンネル・サムネイル等）を取得"""
+    cmd = [_YT_DLP, "--dump-json", "--no-download", "--no-playlist",
+           "--remote-components", "ejs:github"]
+    if _NODE_PATH:
+        cmd += ["--js-runtimes", f"node:{_NODE_PATH}"]
+    cmd.append(url)
     result = subprocess.run(
-        [_YT_DLP, "--dump-json", "--no-download", "--no-playlist", url],
+        cmd,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=60,
     )
     if result.returncode != 0:
         raise RuntimeError(f"メタデータの取得に失敗: {result.stderr[:200]}")
@@ -56,11 +70,16 @@ def search_piano_covers(song_title: str, artist: str = "", max_results: int = 8)
     query_parts.append("piano cover")
     query = f"ytsearch{max_results}:{' '.join(query_parts)}"
 
+    cmd = [_YT_DLP, "--dump-json", "--no-download", "--flat-playlist",
+           "--remote-components", "ejs:github"]
+    if _NODE_PATH:
+        cmd += ["--js-runtimes", f"node:{_NODE_PATH}"]
+    cmd.append(query)
     result = subprocess.run(
-        [_YT_DLP, "--dump-json", "--no-download", "--flat-playlist", query],
+        cmd,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=60,
     )
     if result.returncode != 0:
         return []

@@ -22,6 +22,14 @@ if not _ffmpeg:
 if _ffmpeg:
     _FFMPEG_DIR = os.path.dirname(_ffmpeg)
 
+# Node.jsランタイムのパスを検出（yt-dlpのYouTube JS認証に必要）
+_NODE_PATH = shutil.which("node")
+if not _NODE_PATH:
+    for candidate in ["/opt/homebrew/bin/node", "/usr/local/bin/node"]:
+        if os.path.isfile(candidate):
+            _NODE_PATH = candidate
+            break
+
 
 def validate_youtube_url(url: str) -> bool:
     """YouTube URLの形式を検証"""
@@ -54,7 +62,10 @@ def download_youtube_audio(url: str) -> str:
         "-o", output_template,
         "--no-playlist",
         "--max-filesize", "50m",
+        "--remote-components", "ejs:github",
     ]
+    if _NODE_PATH:
+        cmd += ["--js-runtimes", f"node:{_NODE_PATH}"]
     if _FFMPEG_DIR:
         cmd += ["--ffmpeg-location", _FFMPEG_DIR]
     cmd.append(url)
