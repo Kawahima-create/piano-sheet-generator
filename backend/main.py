@@ -209,15 +209,22 @@ async def transcribe_ensemble(request: EnsembleRequest):
 
     audio_dirs: list[str] = []
     try:
-        # 各カバーをダウンロード→転写
+        # 各カバーをダウンロード→転写（失敗した個別カバーはスキップ）
         midi_list = []
         for i, url in enumerate(request.urls):
-            logger.info(f"Ensemble: downloading {i+1}/{len(request.urls)}: {url}")
-            audio_path = download_youtube_audio(url)
-            audio_dirs.append(os.path.dirname(audio_path))
-            logger.info(f"Ensemble: transcribing {i+1}/{len(request.urls)}")
-            midi_data = transcribe_audio(audio_path)
-            midi_list.append(midi_data)
+            try:
+                logger.info(f"Ensemble: downloading {i+1}/{len(request.urls)}: {url}")
+                audio_path = download_youtube_audio(url)
+                audio_dirs.append(os.path.dirname(audio_path))
+                logger.info(f"Ensemble: transcribing {i+1}/{len(request.urls)}")
+                midi_data = transcribe_audio(audio_path)
+                midi_list.append(midi_data)
+            except Exception as e:
+                logger.warning(f"Ensemble: skipping {i+1}/{len(request.urls)} ({url}): {e}")
+                continue
+
+        if not midi_list:
+            raise RuntimeError("すべてのカバーのダウンロードに失敗しました")
 
         # アンサンブル統合
         logger.info(f"Ensemble: merging {len(midi_list)} transcriptions")

@@ -110,6 +110,7 @@ export default function UploadForm({ onResult, onError }: UploadFormProps) {
       }
       // カバーが見つからなかった場合はSourceSelectorを表示
     } catch (e) {
+      setAnalysis(null);
       onError(e instanceof Error ? e.message : "分析に失敗しました");
     } finally {
       setIsLoading(false);
